@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threads認証 - コールバック</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h2>認証を処理中...</h2>
+        <p id="status">トークンを取得しています...</p>
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        (function() {
+            try {
+                // URLパラメータから認証コードまたはトークンを取得
+                const hash = window.location.hash.substring(1);
+                const search = window.location.search.substring(1);
+                const hashParams = new URLSearchParams(hash);
+                const searchParams = new URLSearchParams(search);
+                
+                // response_type=token の場合（直接トークンが返される）
+                const accessToken = hashParams.get('access_token');
+                
+                // response_type=code の場合（認証コードが返される - Threads API専用）
+                const code = searchParams.get('code') || hashParams.get('code');
+                
+                const error = searchParams.get('error_description') || searchParams.get('error') || hashParams.get('error_description') || hashParams.get('error');
+                const errorReason = searchParams.get('error_reason') || hashParams.get('error_reason');
+                
+                const statusEl = document.getElementById('status');
+                const errorEl = document.getElementById('error');
+                
+                if (accessToken) {
+                    // 直接トークンを取得できた場合
+                    statusEl.textContent = '認証成功！トークンを取得しました。';
+                    
+                    // 親ウィンドウにメッセージを送信
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'THREADS_OAUTH_SUCCESS',
+                            accessToken: accessToken
+                        }, window.location.origin);
+                        
+                        setTimeout(() => {
+                            window.close();
+                        }, 1000);
+                    } else {
+                        localStorage.setItem('threads_oauth_token', accessToken);
+                        statusEl.textContent = '認証成功！このページを閉じて、元のページに戻ってください。';
+                    }
+                } else if (code) {
+                    // 認証コードを取得した場合、親ウィンドウに送信してトークンに交換してもらう
+                    statusEl.textContent = '認証コードを取得しました。トークンに交換中...';
+                    
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'THREADS_OAUTH_CODE',
+                            code: code
+                        }, window.location.origin);
+                        
+                        setTimeout(() => {
+                            window.close();
+                        }, 1000);
+                    } else {
+                        localStorage.setItem('threads_oauth_code', code);
+                        statusEl.textContent = '認証コードを取得しました。元のページに戻ってください。';
+                    }
+                } else if (error) {
+                    // エラーが発生した場合
+                    statusEl.textContent = '認証に失敗しました';
+                    errorEl.style.display = 'block';
+                    errorEl.innerHTML = `
+                        <strong>エラー:</strong> ${error}<br>
+                        ${errorReason ? `<strong>理由:</strong> ${errorReason}` : ''}
+                    `;
+                    
+                    // 親ウィンドウにエラーメッセージを送信
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'THREADS_OAUTH_ERROR',
+                            error: error
+                        }, window.location.origin);
+                    }
+                } else {
+                    // トークンもコードもエラーもない場合
+                    statusEl.textContent = '認証情報が見つかりませんでした。';
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = 'URLに認証情報が含まれていません。';
+                }
+            } catch (e) {
+                document.getElementById('status').textContent = 'エラーが発生しました';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = e.message;
+            }
+        })();
+    </script>
+</body>
+</html>
