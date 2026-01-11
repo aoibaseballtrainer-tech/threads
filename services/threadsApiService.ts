@@ -131,6 +131,38 @@ export const getAccessTokenViaOAuth = async (
     
     console.log('ポップアップが正常に開かれました');
 
+    // localStorageからリダイレクトされた認証コードをチェック
+    const checkRedirectedCode = () => {
+      const redirected = localStorage.getItem('threads_oauth_redirect');
+      const code = localStorage.getItem('threads_oauth_code');
+      if (redirected === 'true' && code) {
+        console.log('リダイレクトされた認証コードを検出:', code.substring(0, 10) + '...');
+        localStorage.removeItem('threads_oauth_redirect');
+        localStorage.removeItem('threads_oauth_code');
+        
+        // App Secretを取得
+        const appSecret = localStorage.getItem(`threads_api_appSecret_${trimmedAppId}`) || '';
+        if (appSecret) {
+          // トークンに交換
+          exchangeCodeForToken(code, trimmedAppId, appSecret, callbackUrl).then(result => {
+            resolve(result);
+          });
+        } else {
+          resolve({
+            success: false,
+            message: 'App Secretが必要です。App Secretを入力してから再度お試しください。'
+          });
+        }
+        return true;
+      }
+      return false;
+    };
+    
+    // ページ読み込み時にリダイレクトされたコードをチェック
+    if (checkRedirectedCode()) {
+      return; // 既に処理された場合は終了
+    }
+    
     // ポップアップからのメッセージをリッスン
     const handleMessage = async (event: MessageEvent) => {
       console.log('メッセージを受信:', event.data.type, 'from:', event.origin, 'expected:', window.location.origin);
@@ -207,8 +239,10 @@ export const getAccessTokenViaOAuth = async (
       }
     };
 
-    console.log('メッセージリスナーを登録しました。オリジン:', window.location.origin);
+    console.log('メッセージリスナーを登録します。オリジン:', window.location.origin);
+    console.log('現在のURL:', window.location.href);
     window.addEventListener('message', handleMessage);
+    console.log('メッセージリスナーを登録しました');
 
     // ポップアップが閉じられた場合
     let messageReceived = false;

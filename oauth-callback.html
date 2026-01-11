@@ -91,44 +91,79 @@
                     // 認証コードを取得した場合、親ウィンドウに送信してトークンに交換してもらう
                     statusEl.textContent = '認証コードを取得しました。トークンに交換中...';
                     
-                    if (window.opener) {
+                    // ポップアップとして開かれているか確認
+                    if (window.opener && !window.opener.closed) {
                         console.log('認証コードを親ウィンドウに送信:', code.substring(0, 10) + '...');
-                        console.log('送信先オリジン:', window.location.origin);
+                        console.log('送信元オリジン:', window.location.origin);
+                        console.log('送信先オリジン（window.opener.location）:', window.opener.location?.origin || '取得不可');
                         console.log('window.opener存在:', !!window.opener);
                         console.log('window.opener.closed:', window.opener.closed);
                         
                         // メッセージを送信（複数回試行）
-                        const sendMessage = () => {
+                        const sendMessage = (attempt: number) => {
                             try {
-                                window.opener.postMessage({
-                                    type: 'THREADS_OAUTH_CODE',
-                                    code: code
-                                }, window.location.origin);
-                                console.log('メッセージ送信完了');
+                                if (window.opener && !window.opener.closed) {
+                                    const targetOrigin = window.opener.location?.origin || window.location.origin;
+                                    console.log(`メッセージ送信試行 ${attempt}:`, targetOrigin);
+                                    window.opener.postMessage({
+                                        type: 'THREADS_OAUTH_CODE',
+                                        code: code
+                                    }, targetOrigin);
+                                    console.log(`メッセージ送信完了 (試行 ${attempt})`);
+                                } else {
+                                    console.log(`window.openerが閉じられています (試行 ${attempt})`);
+                                }
                             } catch (error) {
-                                console.error('メッセージ送信エラー:', error);
+                                console.error(`メッセージ送信エラー (試行 ${attempt}):`, error);
                             }
                         };
                         
                         // 即座に送信
-                        sendMessage();
+                        sendMessage(1);
                         
                         // 念のため少し待ってからもう一度送信
-                        setTimeout(sendMessage, 100);
-                        setTimeout(sendMessage, 500);
+                        setTimeout(() => sendMessage(2), 100);
+                        setTimeout(() => sendMessage(3), 500);
+                        setTimeout(() => sendMessage(4), 1000);
                         
                         // メッセージが確実に届くまで少し待ってから閉じる
                         setTimeout(() => {
-                            statusEl.textContent = '認証コードを送信しました。処理中...';
+                            statusEl.textContent = '認証コードを送信しました。このウィンドウを閉じます...';
                         }, 500);
                         
                         setTimeout(() => {
                             console.log('ポップアップを閉じます');
-                            window.close();
-                        }, 3000);
+                            if (window.opener && !window.opener.closed) {
+                                window.close();
+                            }
+                        }, 2000);
                     } else {
+                        // ポップアップとして開かれていない場合（メインウィンドウにリダイレクトされた場合）
+                        console.error('window.openerが存在しないか、閉じられています');
+                        statusEl.textContent = 'エラー: ポップアップウィンドウとして開かれていません。';
+                        errorEl.style.display = 'block';
+                        errorEl.innerHTML = `
+                            <strong>エラー:</strong> 認証は成功しましたが、ポップアップウィンドウとして開かれていませんでした。<br>
+                            このページを閉じて、元のページから再度「自動取得」を試してください。<br>
+                            <br>
+                            <strong>認証コード:</strong> ${code.substring(0, 20)}...<br>
+                            <small>（このコードは自動的に処理されるはずでした）</small>
+                        `;
+                        
+                        // メインウィンドウにリダイレクトされた場合、localStorageに保存して元のページに戻る
                         localStorage.setItem('threads_oauth_code', code);
-                        statusEl.textContent = '認証コードを取得しました。元のページに戻ってください。';
+                        localStorage.setItem('threads_oauth_redirect', 'true');
+                        
+                        // 元のページに戻るボタンを表示
+                        setTimeout(() => {
+                            const backButton = document.createElement('button');
+                            backButton.textContent = '元のページに戻る';
+                            backButton.style.cssText = 'margin-top: 1rem; padding: 0.5rem 1rem; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;';
+                            backButton.onclick = () => {
+                                window.location.href = window.location.origin + '/#settings';
+                            };
+                            errorEl.appendChild(backButton);
+                        }, 1000);
                     }
                 } else if (error) {
                     // エラーが発生した場合
