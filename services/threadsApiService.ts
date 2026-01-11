@@ -120,11 +120,16 @@ export const getAccessTokenViaOAuth = async (
         });
       } else if (event.data.type === 'THREADS_OAUTH_CODE') {
         // 認証コードを取得した場合、トークンに交換する（Threads API専用）
+        console.log('認証コードを受信しました:', event.data.code);
         window.removeEventListener('message', handleMessage);
         if (popup && !popup.closed) popup.close();
         
         // App Secretが必要なので、localStorageから取得を試みる
         const appSecret = localStorage.getItem(`threads_api_appSecret_${trimmedAppId}`) || '';
+        
+        console.log('App Secret取得:', appSecret ? '取得済み' : '未取得');
+        console.log('App ID:', trimmedAppId);
+        console.log('コールバックURL:', callbackUrl);
         
         if (!appSecret) {
           resolve({
@@ -135,14 +140,24 @@ export const getAccessTokenViaOAuth = async (
         }
         
         // 認証コードをトークンに交換
-        const tokenResult = await exchangeCodeForToken(
-          event.data.code,
-          trimmedAppId,
-          appSecret,
-          callbackUrl
-        );
-        
-        resolve(tokenResult);
+        console.log('トークン交換を開始します...');
+        try {
+          const tokenResult = await exchangeCodeForToken(
+            event.data.code,
+            trimmedAppId,
+            appSecret,
+            callbackUrl
+          );
+          
+          console.log('トークン交換結果:', tokenResult.success ? '成功' : '失敗', tokenResult.message);
+          resolve(tokenResult);
+        } catch (error: any) {
+          console.error('トークン交換エラー:', error);
+          resolve({
+            success: false,
+            message: `トークン交換中にエラーが発生しました: ${error.message || '不明なエラー'}`
+          });
+        }
       } else if (event.data.type === 'THREADS_OAUTH_ERROR') {
         window.removeEventListener('message', handleMessage);
         if (popup && !popup.closed) popup.close();
@@ -234,6 +249,9 @@ export const exchangeCodeForToken = async (
   try {
     const url = `https://graph.threads.net/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&grant_type=authorization_code&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
     
+    console.log('トークン交換URL:', url.replace(/client_secret=[^&]+/, 'client_secret=***'));
+    console.log('認証コード:', code.substring(0, 10) + '...');
+    
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -241,7 +259,10 @@ export const exchangeCodeForToken = async (
       },
     });
     
+    console.log('レスポンスステータス:', response.status, response.statusText);
+    
     const data = await response.json();
+    console.log('レスポンスデータ:', data);
     
     if (data.access_token) {
       return {
@@ -250,12 +271,15 @@ export const exchangeCodeForToken = async (
         message: 'アクセストークンを取得しました'
       };
     } else {
+      const errorMessage = data.error?.message || data.error_description || data.error?.error_user_msg || 'アクセストークンの取得に失敗しました';
+      const errorCode = data.error?.code || data.error?.error_code || '';
       return {
         success: false,
-        message: data.error?.message || data.error_description || 'アクセストークンの取得に失敗しました'
+        message: errorCode ? `エラー (${errorCode}): ${errorMessage}` : errorMessage
       };
     }
   } catch (error: any) {
+    console.error('fetchエラー:', error);
     return {
       success: false,
       message: `接続エラー: ${error.message || '不明なエラーが発生しました'}`

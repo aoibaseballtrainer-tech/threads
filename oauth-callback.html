@@ -92,14 +92,23 @@
                     statusEl.textContent = '認証コードを取得しました。トークンに交換中...';
                     
                     if (window.opener) {
+                        console.log('認証コードを親ウィンドウに送信:', code.substring(0, 10) + '...');
+                        console.log('送信先オリジン:', window.location.origin);
+                        
+                        // メッセージを送信
                         window.opener.postMessage({
                             type: 'THREADS_OAUTH_CODE',
                             code: code
                         }, window.location.origin);
                         
+                        // メッセージが確実に届くまで少し待ってから閉じる
+                        setTimeout(() => {
+                            statusEl.textContent = '認証コードを送信しました。処理中...';
+                        }, 500);
+                        
                         setTimeout(() => {
                             window.close();
-                        }, 1000);
+                        }, 2000);
                     } else {
                         localStorage.setItem('threads_oauth_code', code);
                         statusEl.textContent = '認証コードを取得しました。元のページに戻ってください。';
