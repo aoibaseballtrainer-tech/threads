@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThreadsApiConfig, UserProfile, PeriodicEntry, ScheduledPost, SystemAiSettings } from '../types';
-import { testThreadsConnection, getUserIdFromToken, getAppAccessToken, getAccessTokenViaOAuth } from '../services/threadsApiService';
+import { testThreadsConnection, getUserIdFromToken, getAppAccessToken, getAccessTokenViaOAuth, exchangeCodeForToken } from '../services/threadsApiService';
 
 interface ApiSettingsProps {
   config?: ThreadsApiConfig;
@@ -57,6 +57,72 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
       setAppSecret(config.appSecret || '');
     }
   }, [config]);
+
+  // ページ読み込み時に、リダイレクトされた認証コードをチェックして自動処理
+  useEffect(() => {
+    const checkRedirectedCode = async () => {
+      const redirected = localStorage.getItem('threads_oauth_redirect');
+      const code = localStorage.getItem('threads_oauth_code');
+      
+      if (redirected === 'true' && code) {
+        console.log('リダイレクトされた認証コードを検出:', code.substring(0, 10) + '...');
+        
+        // App IDとApp Secretを取得
+        const trimmedAppId = appId || initialConfig?.appId || '';
+        const appSecretValue = appSecret || initialConfig?.appSecret || '';
+        
+        if (!trimmedAppId || !appSecretValue) {
+          alert('App IDとApp Secretが必要です。設定画面で入力してください。');
+          localStorage.removeItem('threads_oauth_redirect');
+          localStorage.removeItem('threads_oauth_code');
+          return;
+        }
+        
+        // コールバックURLを取得
+        const callbackUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? 'https://localhost:3000/oauth-callback.html'
+          : `${window.location.origin}/oauth-callback.html`;
+        
+        // トークンに交換
+        try {
+          const result = await exchangeCodeForToken(code, trimmedAppId, appSecretValue, callbackUrl);
+          
+          if (result.success && result.accessToken) {
+            setAccessToken(result.accessToken);
+            // 自動的にユーザーIDも取得
+            const userInfo = await getUserIdFromToken(result.accessToken);
+            if (userInfo.success && userInfo.userId) {
+              setUserId(userInfo.userId);
+            }
+            
+            // 設定を保存
+            const updatedConfig: ThreadsApiConfig = {
+              ...initialConfig,
+              accessToken: result.accessToken,
+              userId: userInfo.success ? userInfo.userId : initialConfig?.userId || '',
+              appId: trimmedAppId,
+              appSecret: appSecretValue
+            };
+            onUpdate(updatedConfig);
+            localStorage.setItem(`threads_api_config_${currentUser.id}`, JSON.stringify(updatedConfig));
+            
+            alert('アクセストークンを取得しました！');
+          } else {
+            alert(`エラー: ${result.message}`);
+          }
+        } catch (error: any) {
+          console.error('トークン交換エラー:', error);
+          alert(`エラー: ${error.message || 'トークン交換に失敗しました'}`);
+        }
+        
+        // localStorageをクリア
+        localStorage.removeItem('threads_oauth_redirect');
+        localStorage.removeItem('threads_oauth_code');
+      }
+    };
+    
+    checkRedirectedCode();
+  }, []); // 初回のみ実行
 
   return (
     <div className="max-w-4xl mx-auto space-y-12 pb-20">
@@ -405,9 +471,34 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
                        ? 'https://localhost:3000/oauth-callback.html'
                        : `${window.location.origin}/oauth-callback.html`}
                    </code>
-                   <p className="text-xs text-indigo-600 mt-1">
+                   <p className="text-xs text-indigo-600 mt-1 mb-2">
                      現在の環境: {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '開発環境 (localhost)' : `本番環境 (${window.location.hostname})`}
                    </p>
+                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-2">
+                     <p className="text-xs text-yellow-900 font-bold mb-2">⚠️ コールバックURLの確認方法：</p>
+                     <ol className="list-decimal list-inside space-y-1 text-xs text-yellow-800 ml-2">
+                       <li>Meta for Developersでアプリを開く</li>
+                       <li>「ユースケース &gt; カスタマイズ」→「設定」を開く</li>
+                       <li>「コールバックURLをリダイレクト」の欄を確認</li>
+                       <li>上記のURLが<strong>正確に一致しているか</strong>確認（末尾のスラッシュや大文字小文字も含めて）</li>
+                     </ol>
+                     <button
+                       type="button"
+                       onClick={() => {
+                         const trimmedAppId = appId || initialConfig?.appId || '';
+                         if (!trimmedAppId) {
+                           alert('App IDを先に入力してください');
+                           return;
+                         }
+                         const url = `https://developers.facebook.com/apps/${trimmedAppId}/threads/use-case/`;
+                         window.open(url, '_blank');
+                       }}
+                       className="mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg text-xs font-bold hover:bg-yellow-700 transition-all"
+                     >
+                       <i className="fas fa-external-link-alt mr-1"></i>
+                       Threads API設定画面を開いて確認
+                     </button>
+                   </div>
                    
                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                      <p className="text-xs text-blue-900 font-bold mb-2">📍 設定方法（2つの方法があります）：</p>
