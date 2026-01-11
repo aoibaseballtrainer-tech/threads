@@ -418,7 +418,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
                           <li>「ユースケース &gt; カスタマイズ」画面を開く（現在の画面）</li>
                          <li>左側の「Threads APIにアクセス」セクションで「<strong>設定</strong>」をクリック</li>
                          <li>「<strong>コールバックURLをリダイレクト</strong>」の欄に以下を入力：
-                           <code className="bg-green-100 px-1 rounded block mt-1">https://localhost:3000/oauth-callback.html</code>
+                           <code className="bg-green-100 px-1 rounded block mt-1">{window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                             ? 'https://localhost:3000/oauth-callback.html'
+                             : `${window.location.origin}/oauth-callback.html`}</code>
                          </li>
                          <li>「<strong>保存する</strong>」ボタンをクリック</li>
                        </ol>
