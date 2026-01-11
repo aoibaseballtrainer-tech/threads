@@ -94,12 +94,28 @@
                     if (window.opener) {
                         console.log('認証コードを親ウィンドウに送信:', code.substring(0, 10) + '...');
                         console.log('送信先オリジン:', window.location.origin);
+                        console.log('window.opener存在:', !!window.opener);
+                        console.log('window.opener.closed:', window.opener.closed);
                         
-                        // メッセージを送信
-                        window.opener.postMessage({
-                            type: 'THREADS_OAUTH_CODE',
-                            code: code
-                        }, window.location.origin);
+                        // メッセージを送信（複数回試行）
+                        const sendMessage = () => {
+                            try {
+                                window.opener.postMessage({
+                                    type: 'THREADS_OAUTH_CODE',
+                                    code: code
+                                }, window.location.origin);
+                                console.log('メッセージ送信完了');
+                            } catch (error) {
+                                console.error('メッセージ送信エラー:', error);
+                            }
+                        };
+                        
+                        // 即座に送信
+                        sendMessage();
+                        
+                        // 念のため少し待ってからもう一度送信
+                        setTimeout(sendMessage, 100);
+                        setTimeout(sendMessage, 500);
                         
                         // メッセージが確実に届くまで少し待ってから閉じる
                         setTimeout(() => {
@@ -107,8 +123,9 @@
                         }, 500);
                         
                         setTimeout(() => {
+                            console.log('ポップアップを閉じます');
                             window.close();
-                        }, 2000);
+                        }, 3000);
                     } else {
                         localStorage.setItem('threads_oauth_code', code);
                         statusEl.textContent = '認証コードを取得しました。元のページに戻ってください。';

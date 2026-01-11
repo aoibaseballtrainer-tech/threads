@@ -107,10 +107,18 @@ export const getAccessTokenViaOAuth = async (
 
     // ポップアップからのメッセージをリッスン
     const handleMessage = async (event: MessageEvent) => {
+      console.log('メッセージを受信:', event.data.type, 'from:', event.origin, 'expected:', window.location.origin);
+      
       // セキュリティチェック（同じオリジンからのみ）
-      if (event.origin !== window.location.origin) return;
+      if (event.origin !== window.location.origin) {
+        console.log('オリジン不一致のため無視:', event.origin, '!==', window.location.origin);
+        return;
+      }
 
       if (event.data.type === 'THREADS_OAUTH_SUCCESS') {
+        console.log('アクセストークンを直接受信しました');
+        messageReceived = true;
+        clearInterval(checkClosed);
         window.removeEventListener('message', handleMessage);
         if (popup && !popup.closed) popup.close();
         resolve({
@@ -121,6 +129,8 @@ export const getAccessTokenViaOAuth = async (
       } else if (event.data.type === 'THREADS_OAUTH_CODE') {
         // 認証コードを取得した場合、トークンに交換する（Threads API専用）
         console.log('認証コードを受信しました:', event.data.code);
+        messageReceived = true;
+        clearInterval(checkClosed);
         window.removeEventListener('message', handleMessage);
         if (popup && !popup.closed) popup.close();
         
@@ -159,6 +169,9 @@ export const getAccessTokenViaOAuth = async (
           });
         }
       } else if (event.data.type === 'THREADS_OAUTH_ERROR') {
+        console.log('OAuthエラーを受信:', event.data.error);
+        messageReceived = true;
+        clearInterval(checkClosed);
         window.removeEventListener('message', handleMessage);
         if (popup && !popup.closed) popup.close();
         resolve({
@@ -168,19 +181,27 @@ export const getAccessTokenViaOAuth = async (
       }
     };
 
+    console.log('メッセージリスナーを登録しました。オリジン:', window.location.origin);
     window.addEventListener('message', handleMessage);
 
     // ポップアップが閉じられた場合
+    let messageReceived = false;
     const checkClosed = setInterval(() => {
-      if (popup.closed) {
+      if (popup.closed && !messageReceived) {
+        console.log('ポップアップが閉じられましたが、メッセージが受信されていません');
         clearInterval(checkClosed);
-        window.removeEventListener('message', handleMessage);
         // メッセージが来ていない場合のみキャンセルとみなす
-        // （成功メッセージが来た場合は既にresolveされている）
+        // ただし、メッセージが遅れて来る可能性があるので、少し待つ
         setTimeout(() => {
-          // この時点でまだresolveされていない場合のみエラー
-          // ただし、これは完全には検出できないので、タイムアウトに任せる
-        }, 100);
+          if (!messageReceived) {
+            console.log('メッセージが来なかったため、タイムアウトとみなします');
+            window.removeEventListener('message', handleMessage);
+            resolve({
+              success: false,
+              message: '認証が完了しませんでした。ポップアップが閉じられましたが、認証情報が受信されませんでした。'
+            });
+          }
+        }, 2000);
       }
     }, 1000);
 
