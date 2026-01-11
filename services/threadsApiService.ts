@@ -78,12 +78,24 @@ export const getAccessTokenViaOAuth = async (
     // Threads API専用のOAuth認証URLを生成（GASコードと同じ）
     // GAS: THREADS_AUTH_URL = 'https://threads.net/oauth/authorize'
     const scopes = 'threads_basic,threads_content_publish';
-    const authUrl = `https://threads.net/oauth/authorize?client_id=${trimmedAppId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=${scopes}&response_type=code&display=popup`;
+    
+    // URLパラメータを構築（client_idが確実に含まれるように）
+    const params = new URLSearchParams({
+      client_id: trimmedAppId,
+      redirect_uri: callbackUrl,
+      scope: scopes,
+      response_type: 'code',
+      display: 'popup'
+    });
+    const authUrl = `https://threads.net/oauth/authorize?${params.toString()}`;
     
     // デバッグ用（開発時のみ）
     console.log('OAuth認証URL (Threads API専用):', authUrl);
     console.log('使用しているApp ID:', trimmedAppId);
+    console.log('App IDの長さ:', trimmedAppId.length);
+    console.log('App IDが空でないか:', trimmedAppId.length > 0);
     console.log('コールバックURL:', callbackUrl);
+    console.log('URLパラメータ:', params.toString());
 
     // ポップアップウィンドウで認証
     const width = 600;
@@ -91,6 +103,18 @@ export const getAccessTokenViaOAuth = async (
     const left = (window.screen.width - width) / 2;
     const top = (window.screen.height - height) / 2;
     
+    // URLが正しく生成されているか最終確認
+    if (!authUrl.includes('client_id=') || !authUrl.includes(trimmedAppId)) {
+      console.error('OAuth URL生成エラー: client_idが含まれていません');
+      console.error('生成されたURL:', authUrl);
+      resolve({
+        success: false,
+        message: `OAuth URLの生成に失敗しました。App IDが正しく含まれていません。App ID: ${trimmedAppId}`
+      });
+      return;
+    }
+    
+    console.log('ポップアップを開きます:', authUrl);
     const popup = window.open(
       authUrl,
       'Threads認証',
@@ -104,6 +128,8 @@ export const getAccessTokenViaOAuth = async (
       });
       return;
     }
+    
+    console.log('ポップアップが正常に開かれました');
 
     // ポップアップからのメッセージをリッスン
     const handleMessage = async (event: MessageEvent) => {

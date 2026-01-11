@@ -493,9 +493,11 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
                        <strong>localhostでも動作しますが</strong>、以下の点を確認してください：
                      </p>
                      <ul className="text-xs text-yellow-800 mt-1 ml-4 list-disc">
-                       <li>コールバックURLが <code className="bg-yellow-200 px-1 rounded">https://localhost:3000/oauth-callback.html</code> に設定されているか</li>
+                       <li>コールバックURLが <code className="bg-yellow-200 px-1 rounded">{window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                         ? 'https://localhost:3000/oauth-callback.html'
+                         : `${window.location.origin}/oauth-callback.html`}</code> に設定されているか</li>
                        <li>Meta for Developersの「コールバックURLをリダイレクト」に同じURLが設定されているか</li>
-                       <li>HTTPSでアクセスしているか（<code className="bg-yellow-200 px-1 rounded">https://localhost:3000</code>）</li>
+                       <li>HTTPSでアクセスしているか（<code className="bg-yellow-200 px-1 rounded">{window.location.protocol === 'https:' ? '✓ HTTPS' : '✗ HTTP'}</code>）</li>
                        <li>ブラウザの証明書警告を許可しているか（自己署名証明書の場合）</li>
                      </ul>
                    </div>
