@@ -669,13 +669,67 @@ ${currentUrl}
                  <i className="fas fa-key text-indigo-500"></i>
                  Meta Access Token <span className="text-gray-400 text-[9px]">（アプリID/app secretと併用可能）</span>
                </label>
-               <div className="flex gap-2">
-                 <textarea 
-                   value={accessToken} 
-                   onChange={e => setAccessToken(e.target.value)} 
-                   placeholder="EAAxxxxxxxxxxxxx（自動取得ボタンで取得するか、手動で貼り付け）"
-                   className="flex-1 rounded-2xl border-2 border-gray-200 bg-gray-50 p-6 font-mono text-[10px] h-24 focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-50 outline-none transition-all" 
-                 />
+               
+               {/* 手動取得の説明 */}
+               <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 mb-3">
+                 <p className="text-xs text-blue-800 font-bold mb-2 flex items-start gap-2">
+                   <i className="fas fa-hand-pointer text-blue-600 mt-0.5"></i>
+                   <span>手動で取得する方法（推奨・確実）</span>
+                 </p>
+                 <ol className="list-decimal list-inside space-y-1 text-xs text-blue-700 ml-6">
+                   <li>下記の「Graph APIエクスプローラーを開く」ボタンをクリック</li>
+                   <li>「ユーザートークン」を選択</li>
+                   <li>必要な権限を選択（<code className="bg-blue-100 px-1 rounded">threads_basic</code>, <code className="bg-blue-100 px-1 rounded">threads_content_publish</code>）</li>
+                   <li>「アクセストークンを生成」をクリック</li>
+                   <li>表示されたトークンを下の入力欄に貼り付けて保存</li>
+                 </ol>
+                 <div className="mt-3 flex gap-2">
+                   <button
+                     type="button"
+                     onClick={() => {
+                       const trimmedAppId = appId || initialConfig?.appId || '';
+                       if (!trimmedAppId) {
+                         alert('アプリIDを先に入力してください');
+                         return;
+                       }
+                       const url = `https://developers.facebook.com/tools/explorer/?app_id=${trimmedAppId}`;
+                       window.open(url, '_blank');
+                     }}
+                     disabled={!appId}
+                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+                   >
+                     <i className="fas fa-external-link-alt mr-1"></i>
+                     Graph APIエクスプローラーを開く
+                   </button>
+                   <button
+                     type="button"
+                     onClick={() => {
+                       const trimmedAppId = appId || initialConfig?.appId || '';
+                       if (!trimmedAppId) {
+                         alert('アプリIDを先に入力してください');
+                         return;
+                       }
+                       const url = `https://developers.facebook.com/apps/${trimmedAppId}/threads/token-generator/`;
+                       window.open(url, '_blank');
+                     }}
+                     disabled={!appId}
+                     className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+                   >
+                     <i className="fas fa-key mr-1"></i>
+                     ユーザートークン生成ツール
+                   </button>
+                 </div>
+               </div>
+
+               {/* 自動取得の説明 */}
+               <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 mb-3">
+                 <p className="text-xs text-amber-800 font-bold mb-2 flex items-start gap-2">
+                   <i className="fas fa-magic text-amber-600 mt-0.5"></i>
+                   <span>自動取得（OAuth認証）</span>
+                 </p>
+                 <p className="text-xs text-amber-700 mb-2">
+                   自動取得がうまくいかない場合は、上記の「手動で取得する方法」を使用してください。
+                 </p>
                  <button
                    type="button"
                    onClick={async () => {
@@ -684,8 +738,17 @@ ${currentUrl}
                        return;
                      }
                      
+                     if (!appSecret) {
+                       alert('App Secretが必要です。App Secretを入力してから再度お試しください。');
+                       return;
+                     }
+                     
+                     // App SecretをlocalStorageに保存
+                     const trimmedAppId = appId.trim();
+                     localStorage.setItem(`threads_api_appSecret_${trimmedAppId}`, appSecret);
+                     
                      setTestResult(null);
-                     const result = await getAccessTokenViaOAuth(appId);
+                     const result = await getAccessTokenViaOAuth(trimmedAppId);
                      
                      if (result.success && result.accessToken) {
                        setAccessToken(result.accessToken);
@@ -696,20 +759,28 @@ ${currentUrl}
                        }
                        alert('アクセストークンを取得しました！');
                      } else {
-                       alert(`エラー: ${result.message}`);
+                       alert(`自動取得に失敗しました: ${result.message}\n\n手動で取得する方法を試してください。`);
                      }
                    }}
-                   disabled={!appId}
-                   className="px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all font-bold text-xs whitespace-nowrap"
+                   disabled={!appId || !appSecret}
+                   className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
                  >
                    <i className="fas fa-magic mr-2"></i>
-                   自動取得
+                   自動取得を試す（OAuth認証）
                  </button>
                </div>
+
+               {/* トークン入力欄 */}
+               <div className="flex gap-2">
+                 <textarea 
+                   value={accessToken} 
+                   onChange={e => setAccessToken(e.target.value)} 
+                   placeholder="EAAxxxxxxxxxxxxx（上記の方法で取得したトークンを貼り付けてください）"
+                   className="flex-1 rounded-2xl border-2 border-gray-200 bg-gray-50 p-6 font-mono text-[10px] h-24 focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-50 outline-none transition-all" 
+                 />
+               </div>
                <p className="text-[10px] text-gray-500 mt-2 ml-1">
-                 <strong>自動取得ボタン</strong>をクリックすると、Meta認証画面が開きます。認証後、自動的にトークンが入力されます。
-                 <br />
-                 または、Meta for Developers の Graph API エクスプローラーから取得したアクセストークンを手動で貼り付けることもできます。
+                 <strong>推奨：</strong>手動で取得する方法が最も確実です。Graph APIエクスプローラーから取得したトークンを上記の入力欄に貼り付けて保存してください。
                </p>
              </div>
 
