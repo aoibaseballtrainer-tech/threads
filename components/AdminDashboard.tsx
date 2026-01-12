@@ -12,10 +12,14 @@ interface AdminDashboardProps {
   onUpdateUserRole: (userId: string, role: UserRole) => void;
   onViewUserDetails: (userId: string) => void;
   onImportRequest?: (data: any) => void;
+  serverUrl?: string;
+  onUpdateServerUrl?: (url: string) => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, entries, aiSettings, onUpdateAiSettings, onApprove, onCreateUser, onUpdateUserRole, onViewUserDetails, onImportRequest }) => {
-  const [activeTab, setActiveTab] = useState<'folders' | 'issue' | 'global_ai'>('folders');
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, entries, aiSettings, onUpdateAiSettings, onApprove, onCreateUser, onUpdateUserRole, onViewUserDetails, onImportRequest, serverUrl = '', onUpdateServerUrl }) => {
+  const [activeTab, setActiveTab] = useState<'folders' | 'issue' | 'global_ai' | 'server'>('folders');
+  const [urlInput, setUrlInput] = useState(serverUrl);
+  const [showServerDoc, setShowServerDoc] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPass, setNewUserPass] = useState('');
   
@@ -40,6 +44,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, entries, aiSetti
           { id: 'folders', icon: 'fa-folder-tree', label: 'ユーザーフォルダ' },
           { id: 'issue', icon: 'fa-id-card', label: 'アカウント発行' },
           { id: 'global_ai', icon: 'fa-brain', label: '共通AI設定' },
+          { id: 'server', icon: 'fa-network-wired', label: 'サーバー設定' },
         ].map(tab => (
           <button 
             key={tab.id} 
@@ -138,6 +143,66 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, entries, aiSetti
             <div>
               <label className="text-[10px] font-black text-indigo-500 uppercase block mb-3 ml-1">Master Knowledge Base</label>
               <textarea value={localAiSettings.knowledgeBase} onChange={e => setLocalAiSettings({...localAiSettings, knowledgeBase: e.target.value})} className="w-full bg-gray-50 border-gray-100 rounded-3xl p-8 text-sm font-bold min-h-[300px] focus:bg-white outline-none transition-all" placeholder="ナレッジをここに集約..." />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'server' && (
+        <div className="bg-white rounded-[3rem] border-4 border-gray-900 shadow-2xl overflow-hidden">
+          <div className="p-10 bg-gray-900 text-white flex items-center justify-between">
+            <div>
+              <h3 className="text-2xl font-black">サーバーエンドポイント設定</h3>
+              <p className="text-gray-400 text-xs font-bold mt-1 uppercase tracking-widest">Master Database Connector</p>
+            </div>
+            <i className="fas fa-network-wired text-4xl opacity-50"></i>
+          </div>
+          <div className="p-10 space-y-8">
+            <div className="space-y-4">
+              <label className="text-[10px] font-black text-gray-400 uppercase block ml-1 tracking-widest">サーバー URL</label>
+              <div className="flex gap-4">
+                <input 
+                  type="url" 
+                  value={urlInput} 
+                  onChange={e => setUrlInput(e.target.value)} 
+                  placeholder="https://your-server-api.com" 
+                  className="flex-1 rounded-2xl border-2 border-gray-100 bg-gray-50 p-6 font-mono text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all shadow-inner" 
+                />
+                <button 
+                  onClick={() => { 
+                    if (onUpdateServerUrl) {
+                      onUpdateServerUrl(urlInput);
+                      alert('エンドポイントを更新しました。');
+                    }
+                  }} 
+                  className="px-12 py-6 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:scale-105 active:scale-95 transition-all"
+                >
+                  接続
+                </button>
+              </div>
+              <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-4">
+                <i className="fas fa-info-circle text-indigo-500 mt-1"></i>
+                <p className="text-xs text-indigo-800 font-bold leading-relaxed">
+                  自前のサーバーや Supabase 等の API エンドポイントを指定してください。全ユーザーのフォルダデータがここに保存されます。
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-8 border-t border-gray-100">
+              <button onClick={() => setShowServerDoc(!showServerDoc)} className="text-xs font-black text-indigo-600 hover:underline flex items-center gap-2">
+                <i className="fas fa-book"></i> サーバーサイド API の仕様を確認する
+              </button>
+              {showServerDoc && (
+                <div className="mt-6 p-8 bg-gray-50 rounded-3xl text-[11px] text-gray-600 font-mono space-y-4 border border-gray-200 animate-in slide-in-from-top-4">
+                  <h4 className="font-black text-gray-900">Required Endpoints (REST JSON)</h4>
+                  <ul className="list-disc ml-4 space-y-2">
+                    <li><span className="font-black text-indigo-600">POST /api/login</span>: {`{ email, password } -> { status, user, payload }`}</li>
+                    <li><span className="font-black text-indigo-600">POST /api/register</span>: {`{ email, password, fullName... } -> { status }`}</li>
+                    <li><span className="font-black text-indigo-600">POST /api/sync</span>: {`{ userId, data } -> { status, payload }`}</li>
+                    <li><span className="font-black text-indigo-600">GET /api/users</span>: {`() -> { users: [] }`}</li>
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>

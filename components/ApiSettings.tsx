@@ -11,15 +11,13 @@ interface ApiSettingsProps {
     scheduledPosts: ScheduledPost[];
     aiSettings: SystemAiSettings;
   };
-  masterUrl: string;
-  onUpdateMasterUrl: (url: string) => void;
   onUpdate: (config: ThreadsApiConfig) => void;
   onUpdateSyncUrl: (url: string) => void;
   onChangePassword: (newPass: string) => void;
   onImportData: (data: any) => void;
 }
 
-const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppData, masterUrl, onUpdateMasterUrl, onUpdate, onChangePassword, onImportData }) => {
+const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppData, onUpdate, onChangePassword, onImportData }) => {
   // localStorageから設定を復元（更新時に消えないように）
   const getStoredConfig = () => {
     const stored = localStorage.getItem(`threads_api_config_${currentUser.id}`);
@@ -41,8 +39,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
   const [appId, setAppId] = useState(initialConfig?.appId || '');
   const [appSecret, setAppSecret] = useState(initialConfig?.appSecret || '');
   const [showAppSecret, setShowAppSecret] = useState(false);
-  const [urlInput, setUrlInput] = useState(masterUrl);
-  const [showServerDoc, setShowServerDoc] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState(currentUser?.geminiApiKey || '');
+  const [showGeminiApiKey, setShowGeminiApiKey] = useState(false);
   const [showThreadsGuide, setShowThreadsGuide] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
@@ -67,12 +65,28 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
       if (redirected === 'true' && code) {
         console.log('リダイレクトされた認証コードを検出:', code.substring(0, 10) + '...');
         
-        // App IDとApp Secretを取得
-        const trimmedAppId = appId || initialConfig?.appId || '';
+        // App IDとApp Secretを取得（確実にtrimする）
+        const rawAppId = appId || initialConfig?.appId || '';
+        const trimmedAppId = rawAppId ? rawAppId.trim() : '';
         const appSecretValue = appSecret || initialConfig?.appSecret || '';
+        
+        console.log('=== リダイレクトされた認証コード処理 ===');
+        console.log('取得したApp ID (raw):', rawAppId);
+        console.log('取得したApp ID (trimmed):', trimmedAppId);
+        console.log('App IDの長さ:', trimmedAppId.length);
+        console.log('App Secret:', appSecretValue ? '***' : '未入力');
+        console.log('========================');
         
         if (!trimmedAppId || !appSecretValue) {
           alert('App IDとApp Secretが必要です。設定画面で入力してください。');
+          localStorage.removeItem('threads_oauth_redirect');
+          localStorage.removeItem('threads_oauth_code');
+          return;
+        }
+        
+        // App IDの形式を検証
+        if (!/^\d+$/.test(trimmedAppId)) {
+          alert(`App IDの形式が正しくありません。数字のみである必要があります。現在の値: "${trimmedAppId}"`);
           localStorage.removeItem('threads_oauth_redirect');
           localStorage.removeItem('threads_oauth_code');
           return;
@@ -133,65 +147,12 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] border-4 border-gray-900 shadow-2xl overflow-hidden">
-        <div className="p-10 bg-gray-900 text-white flex items-center justify-between">
-          <div>
-            <h3 className="text-2xl font-black">1. サーバーエンドポイント設定</h3>
-            <p className="text-gray-400 text-xs font-bold mt-1 uppercase tracking-widest">Master Database Connector</p>
-          </div>
-          <i className="fas fa-network-wired text-4xl opacity-50"></i>
-        </div>
-        <div className="p-10 space-y-8">
-          <div className="space-y-4">
-             <label className="text-[10px] font-black text-gray-400 uppercase block ml-1 tracking-widest">サーバー URL</label>
-             <div className="flex gap-4">
-                <input 
-                  type="url" 
-                  value={urlInput} 
-                  onChange={e => setUrlInput(e.target.value)} 
-                  placeholder="https://your-server-api.com" 
-                  className="flex-1 rounded-2xl border-2 border-gray-100 bg-gray-50 p-6 font-mono text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all shadow-inner" 
-                />
-                <button 
-                  onClick={() => { onUpdateMasterUrl(urlInput); alert('エンドポイントを更新しました。'); }} 
-                  className="px-12 py-6 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:scale-105 active:scale-95 transition-all"
-                >
-                  接続
-                </button>
-             </div>
-             <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-4">
-               <i className="fas fa-info-circle text-indigo-500 mt-1"></i>
-               <p className="text-xs text-indigo-800 font-bold leading-relaxed">
-                 自前のサーバーや Supabase 等の API エンドポイントを指定してください。全ユーザーのフォルダデータがここに保存されます。
-               </p>
-             </div>
-          </div>
-
-          <div className="pt-8 border-t border-gray-100">
-            <button onClick={() => setShowServerDoc(!showServerDoc)} className="text-xs font-black text-indigo-600 hover:underline flex items-center gap-2">
-              <i className="fas fa-book"></i> サーバーサイド API の仕様を確認する
-            </button>
-            {showServerDoc && (
-              <div className="mt-6 p-8 bg-gray-50 rounded-3xl text-[11px] text-gray-600 font-mono space-y-4 border border-gray-200 animate-in slide-in-from-top-4">
-                <h4 className="font-black text-gray-900">Required Endpoints (REST JSON)</h4>
-                <ul className="list-disc ml-4 space-y-2">
-                  <li><span className="font-black text-indigo-600">POST /api/login</span>: {`{ email, password } -> { status, user, payload }`}</li>
-                  <li><span className="font-black text-indigo-600">POST /api/register</span>: {`{ email, password, fullName... } -> { status }`}</li>
-                  <li><span className="font-black text-indigo-600">POST /api/sync</span>: {`{ userId, data } -> { status, payload }`}</li>
-                  <li><span className="font-black text-indigo-600">GET /api/users</span>: {`() -> { users: [] }`}</li>
-                </ul>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       <div className="bg-white rounded-[3rem] border shadow-sm overflow-hidden">
         <div className="p-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
           <div>
             <h3 className="text-2xl font-black italic flex items-center gap-3">
               <i className="fab fa-threads text-3xl"></i>
-              2. THREADS API 連携
+              THREADS API 連携
             </h3>
             <p className="text-indigo-100 text-xs font-bold mt-2 uppercase tracking-widest">Meta Graph API Integration</p>
           </div>
@@ -351,6 +312,15 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ config, currentUser, allAppDa
           onUpdate(apiConfig);
           // localStorageにも保存（更新時に消えないように）
           localStorage.setItem(`threads_api_config_${currentUser.id}`, JSON.stringify(apiConfig));
+          
+          // Gemini APIキーをユーザープロファイルに保存
+          if (currentUser) {
+            const updatedUser = { ...currentUser, geminiApiKey };
+            localStorage.setItem('threads_current_user', JSON.stringify(updatedUser));
+            // 親コンポーネントに通知するために、ページをリロードするか、親にコールバックを追加する必要がある
+            // 今回はlocalStorageに保存するだけで、次回ログイン時に読み込まれる
+          }
+          
           setTestResult(null);
           alert('API設定を保存しました。ページを更新しても設定は保持されます。'); 
         }} className="p-10 space-y-8">
@@ -787,6 +757,49 @@ ${currentUrl}
                </div>
                <p className="text-[10px] text-gray-500 mt-2 ml-1">
                  アクセストークンから自動取得できます。「自動取得」ボタンをクリックするか、手動で入力してください。
+               </p>
+             </div>
+
+             <div className="border-t border-gray-200 pt-6">
+               <label className="text-[10px] font-black text-gray-400 uppercase block mb-2 ml-1 flex items-center gap-2">
+                 <i className="fas fa-robot text-purple-500"></i>
+                 Gemini API Key <span className="text-gray-400 text-[9px]">（オプション・AI機能を使用する場合のみ）</span>
+               </label>
+               <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 mb-3">
+                 <p className="text-xs text-green-800 font-bold mb-2 flex items-start gap-2">
+                   <i className="fas fa-check-circle text-green-600 mt-0.5"></i>
+                   <span>この設定はオプションです。APIキーを設定しなくても、データ登録・管理・投稿予約などの基本機能はすべて使用できます。</span>
+                 </p>
+               </div>
+               <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-4 mb-3">
+                 <p className="text-xs text-purple-800 font-bold mb-2 flex items-start gap-2">
+                   <i className="fas fa-info-circle text-purple-600 mt-0.5"></i>
+                   <span>AI機能（投稿生成、成長分析）を使用する場合のみ設定してください。各自で取得・設定するため、一般公開時もあなたの課金にはなりません。</span>
+                 </p>
+                 <ol className="list-decimal list-inside space-y-1 text-xs text-purple-700 ml-6 mt-2">
+                   <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline font-bold">Google AI Studio</a> でAPIキーを取得（無料）</li>
+                   <li>「Create API Key」をクリックしてキーを生成</li>
+                   <li>下記の入力欄に貼り付けて保存</li>
+                 </ol>
+               </div>
+               <div className="flex gap-2">
+                 <input 
+                   type={showGeminiApiKey ? "text" : "password"} 
+                   value={geminiApiKey} 
+                   onChange={e => setGeminiApiKey(e.target.value)} 
+                   placeholder="AIzaSy...（未設定でも基本機能は使用可能）"
+                   className="flex-1 rounded-2xl border-2 border-gray-200 bg-gray-50 p-6 font-mono text-sm focus:border-purple-600 focus:bg-white focus:ring-4 focus:ring-purple-50 outline-none transition-all" 
+                 />
+                 <button
+                   type="button"
+                   onClick={() => setShowGeminiApiKey(!showGeminiApiKey)}
+                   className="px-6 py-6 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black transition-all"
+                 >
+                   {showGeminiApiKey ? '非表示' : '表示'}
+                 </button>
+               </div>
+               <p className="text-[10px] text-gray-500 mt-2 ml-1">
+                 <strong>オプション設定：</strong>AI機能を使用する場合のみ設定してください。未設定でも、データ登録・管理・投稿予約などの基本機能はすべて使用できます。
                </p>
              </div>
 

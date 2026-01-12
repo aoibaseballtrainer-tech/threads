@@ -328,10 +328,55 @@ export const exchangeCodeForToken = async (
   redirectUri: string
 ): Promise<{ success: boolean; accessToken?: string; message: string }> => {
   try {
-    const url = `https://graph.threads.net/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&grant_type=authorization_code&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
+    // App IDの検証
+    const trimmedAppId = appId ? appId.trim() : '';
+    if (!trimmedAppId) {
+      console.error('exchangeCodeForToken: App IDが空です');
+      return {
+        success: false,
+        message: 'App IDが設定されていません。App IDを入力してから再度お試しください。'
+      };
+    }
+
+    // App IDの形式を検証（数字のみであることを確認）
+    if (!/^\d+$/.test(trimmedAppId)) {
+      console.error('exchangeCodeForToken: App IDの形式が正しくありません:', trimmedAppId);
+      return {
+        success: false,
+        message: `App IDの形式が正しくありません。数字のみである必要があります。現在の値: "${trimmedAppId}"`
+      };
+    }
+
+    // App Secretの検証
+    if (!appSecret || !appSecret.trim()) {
+      console.error('exchangeCodeForToken: App Secretが空です');
+      return {
+        success: false,
+        message: 'App Secretが設定されていません。App Secretを入力してから再度お試しください。'
+      };
+    }
+
+    // URLパラメータをURLSearchParamsで構築（確実にclient_idが含まれるように）
+    const params = new URLSearchParams({
+      client_id: trimmedAppId,
+      client_secret: appSecret.trim(),
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+      code: code
+    });
     
-    console.log('トークン交換URL:', url.replace(/client_secret=[^&]+/, 'client_secret=***'));
+    const url = `https://graph.threads.net/oauth/access_token?${params.toString()}`;
+    
+    console.log('=== トークン交換デバッグ情報 ===');
+    console.log('使用するApp ID:', trimmedAppId);
+    console.log('App IDの長さ:', trimmedAppId.length);
+    console.log('App IDが空でないか:', trimmedAppId.length > 0);
+    console.log('App Secret:', appSecret ? '***' : '未入力');
     console.log('認証コード:', code.substring(0, 10) + '...');
+    console.log('コールバックURL:', redirectUri);
+    console.log('トークン交換URL:', url.replace(/client_secret=[^&]+/, 'client_secret=***'));
+    console.log('URLパラメータ:', params.toString());
+    console.log('========================');
     
     const response = await fetch(url, {
       method: 'GET',
@@ -354,6 +399,7 @@ export const exchangeCodeForToken = async (
     } else {
       const errorMessage = data.error?.message || data.error_description || data.error?.error_user_msg || 'アクセストークンの取得に失敗しました';
       const errorCode = data.error?.code || data.error?.error_code || '';
+      console.error('トークン交換エラー:', errorCode, errorMessage);
       return {
         success: false,
         message: errorCode ? `エラー (${errorCode}): ${errorMessage}` : errorMessage

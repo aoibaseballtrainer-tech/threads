@@ -24,9 +24,30 @@ const Scheduler: React.FC<SchedulerProps> = ({ posts, pastEntries, systemAiSetti
   const [reviewPosts, setReviewPosts] = useState<EditableGeneratedPost[]>([]);
 
   const handleAiGenerate = async () => {
+    // APIキーが未設定の場合は警告を表示
+    if (!userProfile.geminiApiKey || !userProfile.geminiApiKey.trim()) {
+      alert('Gemini APIキーが設定されていません。\n\nAI機能を使用する場合は、設定画面でAPIキーを入力してください。\n\n手動投稿タブから投稿を予約することもできます。');
+      return;
+    }
+
     setIsGenerating(true);
     try {
-      const generated = await generateThreadsPosts("最新のSNSトレンド", 3, systemAiSettings);
+      // ユーザーのGemini APIキーを使用
+      const generated = await generateThreadsPosts(
+        "最新のSNSトレンド", 
+        3, 
+        systemAiSettings,
+        { entries: pastEntries, profile: userProfile },
+        userProfile.geminiApiKey
+      );
+      
+      // 生成結果が空の場合はエラー
+      if (!generated || generated.length === 0) {
+        alert('投稿の生成に失敗しました。\n\nAPIキーが正しいか、または設定画面でAPIキーを確認してください。\n\n手動投稿タブから投稿を予約することもできます。');
+        setIsGenerating(false);
+        return;
+      }
+      
       const now = new Date();
       const formatted = generated.map((text, i) => {
         const time = new Date(now.getTime() + (i + 1) * 3600000);
@@ -38,7 +59,10 @@ const Scheduler: React.FC<SchedulerProps> = ({ posts, pastEntries, systemAiSetti
       });
       setReviewPosts(formatted);
       setShowReview(true);
-    } catch (e) { alert('生成失敗'); }
+    } catch (e: any) {
+      console.error('AI生成エラー:', e);
+      alert('投稿の生成に失敗しました。\n\n' + (e.message || 'APIキーが正しいか確認してください。') + '\n\n手動投稿タブから投稿を予約することもできます。');
+    }
     finally { setIsGenerating(false); }
   };
 
@@ -64,8 +88,30 @@ const Scheduler: React.FC<SchedulerProps> = ({ posts, pastEntries, systemAiSetti
           <i className="fas fa-wand-magic-sparkles text-5xl text-indigo-500"></i>
           <h3 className="text-2xl font-black">AIで投稿案を作成</h3>
           <p className="text-gray-500">あなたの過去の傾向を学習したAIが最適な投稿を提案します。</p>
-          <button onClick={handleAiGenerate} disabled={isGenerating} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-lg transition-all">
-            {isGenerating ? '生成中...' : '投稿案を3件作成する'}
+          {!userProfile.geminiApiKey || !userProfile.geminiApiKey.trim() ? (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 space-y-3">
+              <p className="text-sm font-bold text-amber-800">
+                <i className="fas fa-info-circle mr-2"></i>
+                Gemini APIキーが設定されていません
+              </p>
+              <p className="text-xs text-amber-700">
+                AI機能を使用する場合は、設定画面でGemini APIキーを入力してください。
+                <br />
+                APIキーは<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline font-bold">Google AI Studio</a>で無料で取得できます。
+              </p>
+              <p className="text-xs text-amber-600 font-bold pt-2 border-t border-amber-200">
+                💡 手動投稿タブからも投稿を予約できます
+              </p>
+            </div>
+          ) : null}
+          <button onClick={handleAiGenerate} disabled={isGenerating} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed">
+            {isGenerating ? (
+              <>
+                <i className="fas fa-spinner fa-spin mr-2"></i>生成中...
+              </>
+            ) : (
+              '投稿案を3件作成する'
+            )}
           </button>
         </div>
       ) : (

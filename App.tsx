@@ -26,6 +26,7 @@ const App: React.FC = () => {
       if (savedConfig) {
         user.apiConfig = JSON.parse(savedConfig);
       }
+      // geminiApiKeyは既にuserオブジェクトに含まれている（localStorageに保存されているため）
       return user;
     }
     return null;
@@ -230,8 +231,6 @@ const App: React.FC = () => {
             config={targetUser.apiConfig} 
             currentUser={targetUser} 
             allAppData={{ users, entries, scheduledPosts, aiSettings }} 
-            masterUrl={serverUrl}
-            onUpdateMasterUrl={(url) => { setServerUrl(url); localStorage.setItem('threads_server_endpoint', url); }}
             onUpdate={(c) => {
               const updatedUsers = users.map(u => u.id === targetUser.id ? { ...u, apiConfig: c } : u);
               setUsers(updatedUsers);
@@ -303,6 +302,11 @@ const App: React.FC = () => {
             }} 
             onUpdateUserRole={() => {}} 
             onViewUserDetails={(id) => { setOperatingAsId(id); updateView('dashboard'); }} 
+            serverUrl={serverUrl}
+            onUpdateServerUrl={(url) => { 
+              setServerUrl(url); 
+              localStorage.setItem('threads_server_endpoint', url);
+            }}
           />
         );
       default:

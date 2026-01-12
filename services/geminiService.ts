@@ -1,11 +1,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PeriodicEntry, UserProfile, SystemAiSettings } from "../types";
 
-// Vite環境変数を使用（ブラウザで実行されるため）
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+/**
+ * Gemini APIクライアントを取得（APIキーを引数として受け取る）
+ * ユーザーごとのAPIキーを使用することで、各自の課金になる
+ */
+const getGeminiClient = (apiKey: string) => {
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。');
+  }
+  return new GoogleGenAI({ apiKey: apiKey.trim() });
+};
 
-export const analyzeGrowth = async (entries: PeriodicEntry[], profile: UserProfile) => {
+export const analyzeGrowth = async (entries: PeriodicEntry[], profile: UserProfile, apiKey?: string) => {
   if (entries.length < 2) return "データが不足しています。分析を開始するには少なくとも2回以上の定期登録が必要です。";
 
   const prompt = `
@@ -21,14 +28,24 @@ export const analyzeGrowth = async (entries: PeriodicEntry[], profile: UserProfi
   `;
 
   try {
+    // ユーザーのAPIキーを使用（未設定の場合はエラー）
+    const userApiKey = apiKey || profile.geminiApiKey || '';
+    if (!userApiKey) {
+      return "Gemini APIキーが設定されていません。設定画面でAPIキーを入力してください。";
+    }
+    
+    const ai = getGeminiClient(userApiKey);
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
     return response.text;
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Analysis error:", error);
-    return "現在AI分析をご利用いただけません。";
+    if (error.message && error.message.includes('APIキー')) {
+      return error.message;
+    }
+    return "現在AI分析をご利用いただけません。APIキーが正しいか確認してください。";
   }
 };
 
@@ -36,7 +53,8 @@ export const generateThreadsPosts = async (
   topic: string, 
   count: number, 
   settings: SystemAiSettings,
-  userContext?: { entries: PeriodicEntry[], profile: UserProfile }
+  userContext?: { entries: PeriodicEntry[], profile: UserProfile },
+  apiKey?: string
 ): Promise<string[]> => {
   
   // ユーザーのインサイトコンテキストを作成
@@ -74,6 +92,14 @@ export const generateThreadsPosts = async (
   `;
 
   try {
+    // ユーザーのAPIキーを使用（未設定の場合はエラー）
+    const userApiKey = apiKey || userContext?.profile.geminiApiKey || '';
+    if (!userApiKey) {
+      console.error("Gemini APIキーが設定されていません");
+      return [];
+    }
+    
+    const ai = getGeminiClient(userApiKey);
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -87,8 +113,11 @@ export const generateThreadsPosts = async (
     });
     
     return JSON.parse(response.text || "[]");
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Generation error:", error);
+    if (error.message && error.message.includes('APIキー')) {
+      console.error(error.message);
+    }
     return [];
   }
 };

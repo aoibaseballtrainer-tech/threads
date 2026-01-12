@@ -26,7 +26,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, operatingAs, users,
   useEffect(() => {
     const fetchInsight = async () => {
       if (userEntries.length > 0) {
-        const insight = await analyzeGrowth(sortedEntries, operatingAs);
+        // ユーザーのGemini APIキーを使用
+        const insight = await analyzeGrowth(sortedEntries, operatingAs, operatingAs.geminiApiKey);
         setAiInsight(insight);
       } else {
         setAiInsight('データがまだありません。');
@@ -131,7 +132,21 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, operatingAs, users,
                 <i className="fas fa-microchip"></i> AI ANALYSIS
               </h3>
               <div className="text-sm leading-relaxed font-medium opacity-90 flex-1 italic">
-                "{aiInsight}"
+                {aiInsight.includes('APIキー') || aiInsight.includes('設定') ? (
+                  <div className="space-y-3">
+                    <p className="text-amber-400 font-bold">⚠️ {aiInsight}</p>
+                    <p className="text-xs text-gray-400 pt-3 border-t border-gray-700">
+                      AI分析を使用する場合は、設定画面でGemini APIキーを入力してください。
+                      <br />
+                      APIキーは<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Google AI Studio</a>で無料で取得できます。
+                    </p>
+                    <p className="text-xs text-gray-500 pt-2">
+                      💡 AI分析がなくても、データの登録・管理・投稿予約などの基本機能はすべて使用できます。
+                    </p>
+                  </div>
+                ) : (
+                  `"${aiInsight}"`
+                )}
               </div>
             </div>
           </div>
