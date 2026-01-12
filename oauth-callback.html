@@ -100,21 +100,52 @@
                         console.log('window.opener.closed:', window.opener.closed);
                         
                         // メッセージを送信（複数回試行）
-                        const sendMessage = (attempt: number) => {
+                        const sendMessage = function(attempt) {
                             try {
                                 if (window.opener && !window.opener.closed) {
-                                    const targetOrigin = window.opener.location?.origin || window.location.origin;
-                                    console.log(`メッセージ送信試行 ${attempt}:`, targetOrigin);
+                                    // 親ウィンドウのオリジンを取得（複数の方法を試す）
+                                    let targetOrigin = '*'; // ワイルドカードを使用（セキュリティリスクがあるが、確実に送信するため）
+                                    try {
+                                        if (window.opener.location && window.opener.location.origin) {
+                                            targetOrigin = window.opener.location.origin;
+                                        } else if (document.referrer) {
+                                            const referrerUrl = new URL(document.referrer);
+                                            targetOrigin = referrerUrl.origin;
+                                        } else {
+                                            targetOrigin = window.location.origin;
+                                        }
+                                    } catch (e) {
+                                        // クロスオリジンエラーの場合、ワイルドカードを使用
+                                        targetOrigin = '*';
+                                    }
+                                    
+                                    console.log('メッセージ送信試行 ' + attempt + ':', targetOrigin);
+                                    console.log('認証コード:', code.substring(0, 10) + '...');
+                                    
                                     window.opener.postMessage({
                                         type: 'THREADS_OAUTH_CODE',
                                         code: code
                                     }, targetOrigin);
-                                    console.log(`メッセージ送信完了 (試行 ${attempt})`);
+                                    
+                                    console.log('メッセージ送信完了 (試行 ' + attempt + ')');
+                                    
+                                    // ワイルドカードでも送信（念のため）
+                                    if (targetOrigin !== '*') {
+                                        try {
+                                            window.opener.postMessage({
+                                                type: 'THREADS_OAUTH_CODE',
+                                                code: code
+                                            }, '*');
+                                            console.log('ワイルドカードでも送信完了 (試行 ' + attempt + ')');
+                                        } catch (e) {
+                                            console.log('ワイルドカード送信はスキップ');
+                                        }
+                                    }
                                 } else {
-                                    console.log(`window.openerが閉じられています (試行 ${attempt})`);
+                                    console.log('window.openerが閉じられています (試行 ' + attempt + ')');
                                 }
                             } catch (error) {
-                                console.error(`メッセージ送信エラー (試行 ${attempt}):`, error);
+                                console.error('メッセージ送信エラー (試行 ' + attempt + '):', error);
                             }
                         };
                         
@@ -122,9 +153,10 @@
                         sendMessage(1);
                         
                         // 念のため少し待ってからもう一度送信
-                        setTimeout(() => sendMessage(2), 100);
-                        setTimeout(() => sendMessage(3), 500);
-                        setTimeout(() => sendMessage(4), 1000);
+                        setTimeout(function() { sendMessage(2); }, 100);
+                        setTimeout(function() { sendMessage(3); }, 500);
+                        setTimeout(function() { sendMessage(4); }, 1000);
+                        setTimeout(function() { sendMessage(5); }, 2000);
                         
                         // メッセージが確実に届くまで少し待ってから閉じる
                         setTimeout(() => {

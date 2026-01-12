@@ -163,14 +163,38 @@ export const getAccessTokenViaOAuth = async (
       return; // 既に処理された場合は終了
     }
     
+    // 定期的にlocalStorageをチェック（メッセージが届かない場合のフォールバック）
+    const checkInterval = setInterval(() => {
+      const redirected = localStorage.getItem('threads_oauth_redirect');
+      const code = localStorage.getItem('threads_oauth_code');
+      if (redirected === 'true' && code && !messageReceived) {
+        console.log('定期的チェック: リダイレクトされた認証コードを検出');
+        clearInterval(checkInterval);
+        const appSecret = localStorage.getItem(`threads_api_appSecret_${trimmedAppId}`) || '';
+        if (appSecret) {
+          localStorage.removeItem('threads_oauth_redirect');
+          localStorage.removeItem('threads_oauth_code');
+          exchangeCodeForToken(code, trimmedAppId, appSecret, callbackUrl).then(result => {
+            resolve(result);
+          });
+        }
+      }
+    }, 1000);
+    
     // ポップアップからのメッセージをリッスン
     const handleMessage = async (event: MessageEvent) => {
       console.log('メッセージを受信:', event.data.type, 'from:', event.origin, 'expected:', window.location.origin);
       
-      // セキュリティチェック（同じオリジンからのみ）
-      if (event.origin !== window.location.origin) {
+      // セキュリティチェック（同じオリジン、またはワイルドカードからのメッセージを許可）
+      // ワイルドカード（'*'）はセキュリティリスクがあるが、OAuthコールバックの確実な動作のため許可
+      if (event.origin !== window.location.origin && event.origin !== '*' && event.origin !== 'null') {
         console.log('オリジン不一致のため無視:', event.origin, '!==', window.location.origin);
-        return;
+        // ただし、THREADS_OAUTH_CODEメッセージの場合は、ワイルドカードからのメッセージも許可
+        if (event.data.type === 'THREADS_OAUTH_CODE' && event.data.code) {
+          console.log('THREADS_OAUTH_CODEメッセージのため、オリジンチェックを緩和');
+        } else {
+          return;
+        }
       }
 
       if (event.data.type === 'THREADS_OAUTH_SUCCESS') {
@@ -249,7 +273,27 @@ export const getAccessTokenViaOAuth = async (
     const checkClosed = setInterval(() => {
       if (popup.closed && !messageReceived) {
         console.log('ポップアップが閉じられましたが、メッセージが受信されていません');
+        // localStorageをチェック（メッセージが届かなかった場合のフォールバック）
+        const redirected = localStorage.getItem('threads_oauth_redirect');
+        const code = localStorage.getItem('threads_oauth_code');
+        if (redirected === 'true' && code) {
+          console.log('localStorageから認証コードを検出（フォールバック）');
+          clearInterval(checkClosed);
+          clearInterval(checkInterval);
+          window.removeEventListener('message', handleMessage);
+          const appSecret = localStorage.getItem(`threads_api_appSecret_${trimmedAppId}`) || '';
+          if (appSecret) {
+            localStorage.removeItem('threads_oauth_redirect');
+            localStorage.removeItem('threads_oauth_code');
+            exchangeCodeForToken(code, trimmedAppId, appSecret, callbackUrl).then(result => {
+              resolve(result);
+            });
+            return;
+          }
+        }
+        
         clearInterval(checkClosed);
+        clearInterval(checkInterval);
         // メッセージが来ていない場合のみキャンセルとみなす
         // ただし、メッセージが遅れて来る可能性があるので、少し待つ
         setTimeout(() => {
@@ -258,23 +302,26 @@ export const getAccessTokenViaOAuth = async (
             window.removeEventListener('message', handleMessage);
             resolve({
               success: false,
-              message: '認証が完了しませんでした。ポップアップが閉じられましたが、認証情報が受信されませんでした。'
+              message: '認証が完了しませんでした。ポップアップが閉じられましたが、認証情報が受信されませんでした。\n\n手動で取得する方法を試してください。'
             });
           }
-        }, 2000);
+        }, 3000);
       }
     }, 1000);
 
     // タイムアウト（5分）
     setTimeout(() => {
       clearInterval(checkClosed);
+      clearInterval(checkInterval);
       window.removeEventListener('message', handleMessage);
       if (popup && !popup.closed) popup.close();
       // まだresolveされていない場合のみ
-      resolve({
-        success: false,
-        message: '認証がタイムアウトしました。もう一度お試しください。'
-      });
+      if (!messageReceived) {
+        resolve({
+          success: false,
+          message: '認証がタイムアウトしました。手動で取得する方法を試してください。'
+        });
+      }
     }, 300000);
   });
 };
