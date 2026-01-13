@@ -468,9 +468,32 @@ export const getUserIdFromToken = async (
   accessToken: string
 ): Promise<{ success: boolean; userId?: string; message: string }> => {
   try {
+    // アクセストークンの検証
+    if (!accessToken || !accessToken.trim()) {
+      return {
+        success: false,
+        message: 'アクセストークンが入力されていません。'
+      };
+    }
+
+    const trimmedToken = accessToken.trim();
+    
     // Graph API でユーザー情報を取得
-    const response = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${accessToken}`);
+    const url = `https://graph.facebook.com/v18.0/me?access_token=${encodeURIComponent(trimmedToken)}`;
+    console.log('ユーザーID取得: Graph APIを呼び出し中...');
+    console.log('URL:', url.replace(/access_token=[^&]+/, 'access_token=***'));
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    console.log('レスポンスステータス:', response.status, response.statusText);
+    
     const data = await response.json();
+    console.log('レスポンスデータ:', data);
 
     if (data.id) {
       return {
@@ -479,12 +502,35 @@ export const getUserIdFromToken = async (
         message: 'ユーザーIDを取得しました'
       };
     } else {
+      // エラーの詳細を取得
+      const errorMessage = data.error?.message || data.error_description || 'ユーザーIDの取得に失敗しました';
+      const errorCode = data.error?.code || data.error?.error_code || '';
+      const errorType = data.error?.type || '';
+      
+      console.error('ユーザーID取得エラー:', {
+        code: errorCode,
+        type: errorType,
+        message: errorMessage,
+        fullError: data.error
+      });
+      
+      // よくあるエラーの説明を追加
+      let detailedMessage = errorMessage;
+      if (errorCode === 190) {
+        detailedMessage = 'アクセストークンが無効または期限切れです。新しいトークンを取得してください。';
+      } else if (errorCode === 200) {
+        detailedMessage = 'アクセストークンが必要な権限を持っていません。threads_basic権限が必要です。';
+      } else if (errorType === 'OAuthException') {
+        detailedMessage = `OAuthエラー: ${errorMessage}。トークンが正しいか確認してください。`;
+      }
+      
       return {
         success: false,
-        message: data.error?.message || 'ユーザーIDの取得に失敗しました'
+        message: errorCode ? `エラー (${errorCode}): ${detailedMessage}` : detailedMessage
       };
     }
   } catch (error: any) {
+    console.error('ユーザーID取得: fetchエラー:', error);
     return {
       success: false,
       message: `接続エラー: ${error.message || '不明なエラーが発生しました'}`

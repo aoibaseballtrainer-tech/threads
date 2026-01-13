@@ -800,21 +800,29 @@ ${currentUrl}
                  <button
                    type="button"
                    onClick={async () => {
-                     if (!accessToken) {
+                     if (!accessToken || !accessToken.trim()) {
                        alert('アクセストークンを先に入力してください。');
                        return;
                      }
+                     
                      setIsAutoDetecting(true);
-                     const result = await getUserIdFromToken(accessToken);
-                     if (result.success && result.userId) {
-                       setUserId(result.userId);
-                       alert(`ユーザーIDを自動取得しました: ${result.userId}`);
-                     } else {
-                       alert(`ユーザーIDの取得に失敗しました: ${result.message}`);
+                     try {
+                       const result = await getUserIdFromToken(accessToken.trim());
+                       if (result.success && result.userId) {
+                         setUserId(result.userId);
+                         alert(`ユーザーIDを自動取得しました: ${result.userId}`);
+                       } else {
+                         const errorMsg = result.message || 'ユーザーIDの取得に失敗しました';
+                         alert(`ユーザーIDの取得に失敗しました:\n\n${errorMsg}\n\n確認事項:\n1. アクセストークンが正しいか確認\n2. トークンが期限切れでないか確認\n3. threads_basic権限があるか確認\n4. ブラウザのコンソール（F12）で詳細を確認`);
+                       }
+                     } catch (error: any) {
+                       console.error('ユーザーID取得エラー:', error);
+                       alert(`エラーが発生しました: ${error.message || '不明なエラー'}\n\nブラウザのコンソール（F12）で詳細を確認してください。`);
+                     } finally {
+                       setIsAutoDetecting(false);
                      }
-                     setIsAutoDetecting(false);
                    }}
-                   disabled={isAutoDetecting || !accessToken}
+                   disabled={isAutoDetecting || !accessToken || !accessToken.trim()}
                    className="px-6 py-6 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 active:scale-95 transition-all disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
                  >
                    {isAutoDetecting ? (
